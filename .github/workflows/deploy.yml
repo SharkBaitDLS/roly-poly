@@ -1,0 +1,58 @@
+name: Deploy to Container
+
+on:
+  push:
+    branches: [mainline]
+    paths-ignore:
+      - "**.md"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          components: clippy, rustfmt
+      - name: Cache registry
+        uses: actions/cache@v1
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+      - name: Cache index
+        uses: actions/cache@v1
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-git-index-${{ hashFiles('**/Cargo.lock') }}
+      - name: Cache build artifacts
+        uses: actions/cache@v1
+        with:
+          path: target
+          key: ${{ runner.os }}-cargo-build-artifacts-${{ hashFiles('**/Cargo.lock') }}
+      - name: Lint
+        run: cargo fmt -- --check
+      - name: Clippy
+        run: cargo clippy -- -D warnings --no-deps
+      - name: Test
+        run: cargo test
+      - name: Build
+        run: cargo build --release
+      - name: Upload result
+        uses: actions/upload-artifact@v1
+        with:
+          name: release
+          path: target/release/roly-poly
+
+  deploy:
+    runs-on: self-hosted
+    needs: build
+    steps:
+      - name: Download release binary
+        uses: actions/download-artifact@v1
+        with:
+          name: release
+      - name: Deploy
+        run: cp -f release/roly-poly /home/roly-poly/ && chmod +x /home/roly-poly/roly-poly
+      - name: Activate
+        run: sudo systemctl restart roly-poly
