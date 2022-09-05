@@ -9,11 +9,16 @@ use serenity::{
     prelude::{Context, EventHandler},
 };
 
+#[cfg(not(debug_assertions))]
+use crate::commands::create_commands;
+#[cfg(debug_assertions)]
+use crate::commands::create_test_guild_commands;
 use crate::{
-    commands::create_test_guild_commands,
     database::get_guild_data,
     role_management::{create_message, disable_role, enable_role},
 };
+#[cfg(not(debug_assertions))]
+use serenity::model::application::command::Command;
 
 pub struct Handler {
     db: RwLock<PickleDb>,
