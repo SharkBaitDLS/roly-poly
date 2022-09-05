@@ -46,6 +46,8 @@ jobs:
 
   deploy:
     runs-on: self-hosted
+    environment:
+      name: Deep Thought
     needs: build
     steps:
       - name: Download release binary
