@@ -12,7 +12,7 @@ use serenity::{
             },
             InteractionResponseType,
         },
-        Emoji, EmojiId, EmojiIdentifier, GuildId, ReactionType,
+        EmojiId, EmojiIdentifier, ReactionType,
     },
     prelude::Context,
 };
