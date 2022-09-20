@@ -4,6 +4,7 @@ use bimap::BiMap;
 use log::error;
 use pickledb::PickleDb;
 use serenity::{
+    futures::{stream::FuturesUnordered, StreamExt},
     model::prelude::{
         interaction::{
             application_command::{
@@ -11,7 +12,7 @@ use serenity::{
             },
             InteractionResponseType,
         },
-        EmojiIdentifier, GuildId, ReactionType,
+        Emoji, EmojiId, EmojiIdentifier, GuildId, ReactionType,
     },
     prelude::Context,
 };
@@ -55,7 +56,7 @@ pub async fn enable_role(
         {
             let guild_id = get_guild_id(command);
             let guild_data = get_guild_data(db, &guild_id);
-            let maybe_emoji = get_emoji(ctx, emoji_name, &guild_id).await;
+            let maybe_emoji = get_emoji(ctx, emoji_name).await;
 
             if let Some(emoji) = maybe_emoji {
                 match guild_data {
@@ -148,15 +149,29 @@ pub async fn create_message(
     }
 }
 
-async fn get_emoji(ctx: &Context, emoji_name: &str, guild_id: &GuildId) -> Option<ReactionType> {
-    if emoji_name.starts_with('<') {
-        let identifier = EmojiIdentifier::from_str(emoji_name).ok()?;
+async fn get_emoji(ctx: &Context, emoji_name: &str) -> Option<ReactionType> {
+    let all_emoji: Vec<EmojiId> = ctx
+        .cache
+        .guilds()
+        .iter()
+        .map(|guild| guild.emojis(&ctx))
+        .collect::<FuturesUnordered<_>>()
+        .collect::<Vec<_>>()
+        .await
+        .into_iter()
+        .filter_map(|result| {
+            result
+                .ok()
+                .map(|emojis| emojis.iter().map(|emoji| emoji.id).collect::<Vec<_>>())
+        })
+        .flatten()
+        .collect();
 
-        guild_id
-            .emoji(&ctx, identifier.id)
-            .await
+    if emoji_name.starts_with('<') {
+        EmojiIdentifier::from_str(emoji_name)
             .ok()
-            .map(|emoji| emoji.into())
+            .filter(|identifier| all_emoji.contains(&identifier.id))
+            .map(|identifier| identifier.into())
     } else {
         emoji_name.chars().next().map(|char| char.into())
     }
