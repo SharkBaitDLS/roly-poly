@@ -11,7 +11,7 @@ use serenity::{
             },
             InteractionResponseType,
         },
-        EmojiIdentifier, ReactionType,
+        EmojiIdentifier, GuildId, ReactionType,
     },
     prelude::Context,
 };
@@ -55,7 +55,7 @@ pub async fn enable_role(
         {
             let guild_id = get_guild_id(command);
             let guild_data = get_guild_data(db, &guild_id);
-            let maybe_emoji = get_emoji(emoji_name).await;
+            let maybe_emoji = get_emoji(ctx, emoji_name, &guild_id).await;
 
             if let Some(emoji) = maybe_emoji {
                 match guild_data {
@@ -148,12 +148,15 @@ pub async fn create_message(
     }
 }
 
-async fn get_emoji(emoji_name: &str) -> Option<ReactionType> {
+async fn get_emoji(ctx: &Context, emoji_name: &str, guild_id: &GuildId) -> Option<ReactionType> {
     if emoji_name.starts_with('<') {
-        // TODO: validate that the bot can use the provided emoji
-        EmojiIdentifier::from_str(emoji_name)
+        let identifier = EmojiIdentifier::from_str(emoji_name).ok()?;
+
+        guild_id
+            .emoji(&ctx, identifier.id)
+            .await
             .ok()
-            .map(|identifier| identifier.into())
+            .map(|emoji| emoji.into())
     } else {
         emoji_name.chars().next().map(|char| char.into())
     }
