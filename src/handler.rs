@@ -78,6 +78,11 @@ impl EventHandler for Handler {
         {
             if user_id != bot_id {
                 if let Some(role_id) = get_guild_data(&self.db, &guild_id)
+                    .filter(|data| {
+                        data.get_message_id()
+                            .map(|message| add_reaction.message_id == message)
+                            .unwrap_or(false)
+                    })
                     .and_then(|data| data.get_role(&add_reaction.emoji).cloned())
                 {
                     if let Err(e) = guild_id
@@ -101,6 +106,11 @@ impl EventHandler for Handler {
         ) {
             if user_id != bot_id {
                 if let Some(role_id) = get_guild_data(&self.db, &guild_id)
+                    .filter(|data| {
+                        data.get_message_id()
+                            .map(|message| removed_reaction.message_id == message)
+                            .unwrap_or(false)
+                    })
                     .and_then(|data| data.get_role(&removed_reaction.emoji).cloned())
                 {
                     if let Err(e) = guild_id

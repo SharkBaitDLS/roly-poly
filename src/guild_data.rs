@@ -70,6 +70,10 @@ impl GuildData {
         self.roles_to_emoji.get_by_right(emoji)
     }
 
+    pub fn get_message_id(&self) -> Option<MessageId> {
+        self.message_id
+    }
+
     async fn update_message(&self, ctx: &Context, maybe_emoji: Option<ReactionType>, remove: bool) {
         if let (Some(channel_id), Some(message_id)) = (self.channel_id, self.message_id) {
             if let Err(e) = channel_id
