@@ -79,12 +79,8 @@ pub async fn enable_role(
                 )
                 .await;
             } else {
-                respond_to_command(
-                    ctx,
-                    command,
-                    format!("Could not find emoji: {}", emoji_name),
-                )
-                .await;
+                respond_to_command(ctx, command, format!("Could not find emoji: {emoji_name}"))
+                    .await;
             }
         }
     }
