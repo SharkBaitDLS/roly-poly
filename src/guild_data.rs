@@ -172,7 +172,7 @@ impl GuildData {
                 writeln!(result, "<@&{}>: {}", entry.0, char)
                     .expect("String concatenation success");
             }
-            _ => todo!(),
+            kind => error!("Unknown reaction {kind}, Discord may have made API changes"),
         });
 
         result
