@@ -64,7 +64,7 @@ impl EventHandler for Handler {
         let result = create_for_test_guild(&ctx).await;
 
         #[cfg(not(debug_assertions))]
-        let result = Command::create_global_application_command(&ctx, create_commands).await;
+        let result = Command::create_global_application_command(&ctx, create).await;
 
         if let Err(e) = result {
             error!("Failed to create app command: {}", e);
