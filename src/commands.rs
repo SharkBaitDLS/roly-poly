@@ -6,7 +6,7 @@ use serenity::{
 #[cfg(debug_assertions)]
 use serenity::{model::prelude::command::Command, prelude::Context};
 
-pub fn create_commands(command: &mut CreateApplicationCommand) -> &mut CreateApplicationCommand {
+pub fn create(command: &mut CreateApplicationCommand) -> &mut CreateApplicationCommand {
     command
         .name("role")
         .dm_permission(false)
@@ -65,7 +65,7 @@ pub fn create_commands(command: &mut CreateApplicationCommand) -> &mut CreateApp
 }
 
 #[cfg(debug_assertions)]
-pub async fn create_test_guild_commands(ctx: &Context) -> serenity::Result<Command> {
+pub async fn create_for_test_guild(ctx: &Context) -> serenity::Result<Command> {
     use serenity::model::prelude::GuildId;
     use std::env;
 
@@ -76,7 +76,5 @@ pub async fn create_test_guild_commands(ctx: &Context) -> serenity::Result<Comma
             .expect("DEBUG_GUILD_ID must be an integer"),
     );
 
-    guild_id
-        .create_application_command(&ctx, create_commands)
-        .await
+    guild_id.create_application_command(&ctx, create).await
 }

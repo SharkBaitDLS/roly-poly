@@ -55,21 +55,18 @@ pub async fn enable_role(
             opt.options.get(1).and_then(|arg| arg.resolved.as_ref())
         {
             let guild_id = get_guild_id(command);
-            let guild_data = get_guild_data(db, &guild_id);
+            let guild_data = get_guild_data(db, guild_id);
             let maybe_emoji = get_emoji(ctx, emoji_name).await;
 
             if let Some(emoji) = maybe_emoji {
-                match guild_data {
-                    Some(mut data) => {
-                        data.add_role(ctx, *role.id.as_u64(), emoji).await;
-                        update_guild_data(db, &guild_id, &data);
-                    }
-                    None => {
-                        let mut roles_to_emoji: BiMap<u64, ReactionType> = BiMap::new();
-                        roles_to_emoji.insert(*role.id.as_u64(), emoji);
+                if let Some(mut data) = guild_data {
+                    data.add_role(ctx, *role.id.as_u64(), emoji).await;
+                    update_guild_data(db, guild_id, &data);
+                } else {
+                    let mut roles_to_emoji: BiMap<u64, ReactionType> = BiMap::new();
+                    roles_to_emoji.insert(*role.id.as_u64(), emoji);
 
-                        update_guild_data(db, &guild_id, &GuildData::new(roles_to_emoji));
-                    }
+                    update_guild_data(db, guild_id, &GuildData::new(roles_to_emoji));
                 }
 
                 respond_to_command(
@@ -96,11 +93,11 @@ pub async fn disable_role(
         opt.options.first().and_then(|arg| arg.resolved.as_ref())
     {
         let guild_id = get_guild_id(command);
-        let guild_data = get_guild_data(db, &guild_id);
+        let guild_data = get_guild_data(db, guild_id);
 
         if let Some(mut data) = guild_data {
             data.remove_role(ctx, role.id.as_u64()).await;
-            update_guild_data(db, &guild_id, &data);
+            update_guild_data(db, guild_id, &data);
         }
 
         respond_to_command(
@@ -122,7 +119,7 @@ pub async fn create_message(
         opt.options.first().and_then(|arg| arg.resolved.as_ref())
     {
         let guild_id = get_guild_id(command);
-        let guild_data = get_guild_data(db, &guild_id);
+        let guild_data = get_guild_data(db, guild_id);
 
         match guild_data {
             Some(mut data) => {
@@ -136,7 +133,7 @@ pub async fn create_message(
                 )
                 .await;
 
-                update_guild_data(db, &guild_id, data.send_message(ctx, channel.id).await);
+                update_guild_data(db, guild_id, data.send_message(ctx, channel.id).await);
             }
             None => {
                 respond_to_command(ctx, command, "You have not configured any roles").await;
@@ -167,8 +164,8 @@ async fn get_emoji(ctx: &Context, emoji_name: &str) -> Option<ReactionType> {
         EmojiIdentifier::from_str(emoji_name)
             .ok()
             .filter(|identifier| all_emoji.contains(&identifier.id))
-            .map(|identifier| identifier.into())
+            .map(Into::into)
     } else {
-        emoji_name.chars().next().map(|char| char.into())
+        emoji_name.chars().next().map(Into::into)
     }
 }
