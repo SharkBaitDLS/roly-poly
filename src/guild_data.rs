@@ -4,10 +4,13 @@ use bimap::BiMap;
 use log::error;
 use serde::{Deserialize, Serialize};
 use serenity::{
+    all::{CreateEmbed, CreateMessage, EditMessage},
     futures::TryFutureExt,
-    model::prelude::{ChannelId, MessageId, ReactionType},
+    model::{
+        prelude::{ChannelId, MessageId, ReactionType},
+        Color,
+    },
     prelude::Context,
-    utils::Color,
 };
 
 #[derive(Serialize, Deserialize)]
@@ -29,15 +32,24 @@ impl GuildData {
     pub async fn send_message(&mut self, ctx: &Context, channel_id: ChannelId) -> &Self {
         if !self.message_exists(ctx, channel_id).await {
             let message_id = channel_id
-                .send_message(ctx, |msg| {
-                    msg.add_embed(|embed| {
-                        embed.color(Color::DARKER_GREY).field(
-                            "Self-Assignable Roles",
-                            self.generate_message(),
-                            true,
-                        )
-                    })
-                    .reactions(self.roles_to_emoji.right_values().cloned())
+                .send_message(ctx, {
+                    let result =
+                        CreateMessage::new().reactions(self.roles_to_emoji.right_values().cloned());
+                    let message = self.generate_message();
+
+                    if message.is_empty() {
+                        result
+                            .embeds(Vec::new())
+                            .content("No configured roles to display")
+                    } else {
+                        result
+                            .embed(CreateEmbed::new().color(Color::DARKER_GREY).field(
+                                "Self-Assignable Roles",
+                                message,
+                                true,
+                            ))
+                            .content("")
+                    }
                 })
                 .await
                 .map(|msg| msg.id);
@@ -58,10 +70,10 @@ impl GuildData {
         self.update_message(ctx, Some(emoji), false).await;
     }
 
-    pub async fn remove_role(&mut self, ctx: &Context, role_id: &u64) {
+    pub async fn remove_role(&mut self, ctx: &Context, role_id: u64) {
         let emoji = self
             .roles_to_emoji
-            .remove_by_left(role_id)
+            .remove_by_left(&role_id)
             .map(|(_, emoji)| emoji);
         self.update_message(ctx, emoji, true).await;
     }
@@ -77,21 +89,22 @@ impl GuildData {
     async fn update_message(&self, ctx: &Context, maybe_emoji: Option<ReactionType>, remove: bool) {
         if let (Some(channel_id), Some(message_id)) = (self.channel_id, self.message_id) {
             if let Err(e) = channel_id
-                .edit_message(ctx, message_id, |msg| {
+                .edit_message(ctx, message_id, {
+                    let result = EditMessage::new();
                     let message = self.generate_message();
 
                     if message.is_empty() {
-                        msg.set_embeds(Vec::new())
+                        result
+                            .embeds(Vec::new())
                             .content("No configured roles to display")
                     } else {
-                        msg.embed(|embed| {
-                            embed.color(Color::DARKER_GREY).field(
+                        result
+                            .embed(CreateEmbed::new().color(Color::DARKER_GREY).field(
                                 "Self-Assignable Roles",
                                 message,
                                 true,
-                            )
-                        })
-                        .content("")
+                            ))
+                            .content("")
                     }
                 })
                 .await
@@ -135,7 +148,7 @@ impl GuildData {
         match self.message_id {
             Some(message_id) => ctx
                 .http
-                .get_message(*channel_id.as_u64(), *message_id.as_u64())
+                .get_message(channel_id, message_id)
                 .await
                 .ok()
                 .is_some(),

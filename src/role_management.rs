@@ -1,18 +1,16 @@
-use std::{fmt, str::FromStr, sync::RwLock};
+use std::{str::FromStr, sync::RwLock};
 
 use bimap::BiMap;
-use log::error;
+use log::{error, warn};
 use pickledb::PickleDb;
 use serenity::{
+    builder::{CreateInteractionResponse, CreateInteractionResponseMessage},
     futures::{stream::FuturesUnordered, StreamExt},
-    model::prelude::{
-        interaction::{
-            application_command::{
-                ApplicationCommandInteraction, CommandDataOption, CommandDataOptionValue,
-            },
-            InteractionResponseType,
-        },
-        EmojiId, EmojiIdentifier, ReactionType,
+    model::{
+        application::{CommandDataOption, CommandDataOptionValue, CommandInteraction},
+        channel::ReactionType,
+        id::EmojiId,
+        misc::EmojiIdentifier,
     },
     prelude::Context,
 };
@@ -23,19 +21,19 @@ use crate::{
     util::get_guild_id,
 };
 
-pub async fn respond_to_command<S>(
-    ctx: &Context,
-    command: &ApplicationCommandInteraction,
-    content: S,
-) where
-    S: fmt::Display,
+pub async fn respond_to_command<S>(ctx: &Context, command: &CommandInteraction, content: S)
+where
+    S: Into<String>,
 {
     if let Err(e) = command
-        .create_interaction_response(&ctx, |response| {
-            response
-                .kind(InteractionResponseType::ChannelMessageWithSource)
-                .interaction_response_data(|data| data.ephemeral(true).content(content))
-        })
+        .create_response(
+            &ctx,
+            CreateInteractionResponse::Message(
+                CreateInteractionResponseMessage::new()
+                    .ephemeral(true)
+                    .content(content),
+            ),
+        )
         .await
     {
         error!("Could not respond to command: {:?}", e);
@@ -45,40 +43,50 @@ pub async fn respond_to_command<S>(
 pub async fn enable_role(
     ctx: &Context,
     db: &RwLock<PickleDb>,
-    command: &ApplicationCommandInteraction,
+    command: &CommandInteraction,
     opt: &CommandDataOption,
 ) {
-    if let Some(CommandDataOptionValue::Role(role)) =
-        opt.options.first().and_then(|arg| arg.resolved.as_ref())
-    {
-        if let Some(CommandDataOptionValue::String(emoji_name)) =
-            opt.options.get(1).and_then(|arg| arg.resolved.as_ref())
-        {
-            let guild_id = get_guild_id(command);
-            let guild_data = get_guild_data(db, guild_id);
-            let maybe_emoji = get_emoji(ctx, emoji_name).await;
+    if let CommandDataOptionValue::SubCommand(options) = &opt.value {
+        match &options[0..2] {
+            [CommandDataOption {
+                name: opt1_name,
+                value: CommandDataOptionValue::Role(role_id),
+                ..
+            }, CommandDataOption {
+                name: op2_name,
+                value: CommandDataOptionValue::String(emoji_name),
+                ..
+            }] if opt1_name == "role" && op2_name == "emoji" => {
+                let guild_id = get_guild_id(command);
+                let guild_data = get_guild_data(db, guild_id);
+                let maybe_emoji = get_emoji(ctx, emoji_name).await;
 
-            if let Some(emoji) = maybe_emoji {
-                if let Some(mut data) = guild_data {
-                    data.add_role(ctx, *role.id.as_u64(), emoji).await;
-                    update_guild_data(db, guild_id, &data);
-                } else {
-                    let mut roles_to_emoji: BiMap<u64, ReactionType> = BiMap::new();
-                    roles_to_emoji.insert(*role.id.as_u64(), emoji);
+                if let Some(emoji) = maybe_emoji {
+                    if let Some(mut data) = guild_data {
+                        data.add_role(ctx, (*role_id).into(), emoji).await;
+                        update_guild_data(db, guild_id, &data);
+                    } else {
+                        let mut roles_to_emoji: BiMap<u64, ReactionType> = BiMap::new();
+                        roles_to_emoji.insert((*role_id).into(), emoji);
 
-                    update_guild_data(db, guild_id, &GuildData::new(roles_to_emoji));
-                }
+                        update_guild_data(db, guild_id, &GuildData::new(roles_to_emoji));
+                    }
 
-                respond_to_command(
-                    ctx,
-                    command,
-                    format!("Enabled {} for self-service access", role.name),
-                )
-                .await;
-            } else {
-                respond_to_command(ctx, command, format!("Could not find emoji: {emoji_name}"))
+                    respond_to_command(
+                        ctx,
+                        command,
+                        format!(
+                            "Enabled {} for self-service access",
+                            command.data.resolved.roles[&role_id].name
+                        ),
+                    )
                     .await;
+                } else {
+                    respond_to_command(ctx, command, format!("Could not find emoji: {emoji_name}"))
+                        .await;
+                }
             }
+            _ => warn!("A command was invoked with unexpected arguments, Discord should have prevented this"),
         }
     }
 }
@@ -86,58 +94,78 @@ pub async fn enable_role(
 pub async fn disable_role(
     ctx: &Context,
     db: &RwLock<PickleDb>,
-    command: &ApplicationCommandInteraction,
+    command: &CommandInteraction,
     opt: &CommandDataOption,
 ) {
-    if let Some(CommandDataOptionValue::Role(role)) =
-        opt.options.first().and_then(|arg| arg.resolved.as_ref())
-    {
-        let guild_id = get_guild_id(command);
-        let guild_data = get_guild_data(db, guild_id);
+    if let CommandDataOptionValue::SubCommand(options) = &opt.value {
+        match options.first() {
+            Some(CommandDataOption {
+                name,
+                value: CommandDataOptionValue::Role(role_id),
+                ..
+            }) if name == "role" => {
+                let guild_id = get_guild_id(command);
+                let guild_data = get_guild_data(db, guild_id);
 
-        if let Some(mut data) = guild_data {
-            data.remove_role(ctx, role.id.as_u64()).await;
-            update_guild_data(db, guild_id, &data);
+                if let Some(mut data) = guild_data {
+                    data.remove_role(ctx, (*role_id).into()).await;
+                    update_guild_data(db, guild_id, &data);
+                }
+
+                respond_to_command(
+                    ctx,
+                    command,
+                    format!(
+                        "Disabled {} for self-service access",
+                        command.data.resolved.roles[&role_id].name
+                    ),
+                )
+                .await;
+            }
+            _ => warn!("A command was invoked with unexpected arguments, Discord should have prevented this"),
         }
-
-        respond_to_command(
-            ctx,
-            command,
-            format!("Disabled {} for self-service access", role.name),
-        )
-        .await;
     }
 }
 
 pub async fn create_message(
     ctx: &Context,
     db: &RwLock<PickleDb>,
-    command: &ApplicationCommandInteraction,
+    command: &CommandInteraction,
     opt: &CommandDataOption,
 ) {
-    if let Some(CommandDataOptionValue::Channel(channel)) =
-        opt.options.first().and_then(|arg| arg.resolved.as_ref())
-    {
-        let guild_id = get_guild_id(command);
-        let guild_data = get_guild_data(db, guild_id);
+    if let CommandDataOptionValue::SubCommand(options) = &opt.value {
+        match options.first() {
+            Some(CommandDataOption {
+                name,
+                value: CommandDataOptionValue::Channel(channel_id),
+                ..
+            }) if name == "channel" => {
+                let guild_id = get_guild_id(command);
+                let guild_data = get_guild_data(db, guild_id);
 
-        match guild_data {
-            Some(mut data) => {
-                respond_to_command(
-                    ctx,
-                    command,
-                    format!(
-                        "Sending a message to #{} if one does not already exist",
-                        channel.name.as_ref().expect("Channels should be named")
-                    ),
-                )
-                .await;
+                match guild_data {
+                    Some(mut data) => {
+                        respond_to_command(
+                            ctx,
+                            command,
+                            format!(
+                                "Sending a message to #{} if one does not already exist",
+                                command.data.resolved.channels[&channel_id]
+                                    .name
+                                    .as_ref()
+                                    .expect("Channels should be named")
+                            ),
+                        )
+                        .await;
 
-                update_guild_data(db, guild_id, data.send_message(ctx, channel.id).await);
+                        update_guild_data(db, guild_id, data.send_message(ctx, *channel_id).await);
+                    }
+                    None => {
+                        respond_to_command(ctx, command, "You have not configured any roles").await;
+                    }
+                }
             }
-            None => {
-                respond_to_command(ctx, command, "You have not configured any roles").await;
-            }
+            _ => warn!("A command was invoked with unexpected arguments, Discord should have prevented this"),
         }
     }
 }

@@ -4,9 +4,13 @@ use log::{error, warn};
 use pickledb::PickleDb;
 use serenity::{
     async_trait,
+    client::{Context, EventHandler},
     futures::TryFutureExt,
-    model::prelude::{interaction::Interaction, Reaction, Ready},
-    prelude::{Context, EventHandler},
+    model::{
+        application::{CommandDataOptionValue, Interaction},
+        channel::Reaction,
+        gateway::Ready,
+    },
 };
 
 #[cfg(not(debug_assertions))]
@@ -18,7 +22,7 @@ use crate::{
     role_management::{create_message, disable_role, enable_role},
 };
 #[cfg(not(debug_assertions))]
-use serenity::model::application::command::Command;
+use serenity::model::application::Command;
 
 pub struct Handler {
     db: RwLock<PickleDb>,
@@ -35,14 +39,19 @@ impl Handler {
 #[async_trait]
 impl EventHandler for Handler {
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
-        if let Interaction::ApplicationCommand(command) = interaction {
-            // We only define one sub-command group under role so we don't inspect the first option
+        if let Interaction::Command(command) = interaction {
             match command
                 .data
                 .options
                 .first()
-                .and_then(|sub| sub.options.first())
-            {
+                .and_then(|opt| match &opt.value {
+                    CommandDataOptionValue::SubCommandGroup(group)
+                        if command.data.name == "role" && opt.name == "self-service" =>
+                    {
+                        group.first()
+                    }
+                    _ => None,
+                }) {
                 Some(opt) if opt.name == "enable" => {
                     enable_role(&ctx, &self.db, &command, opt).await;
                 }
@@ -52,7 +61,7 @@ impl EventHandler for Handler {
                 Some(opt) if opt.name == "message" => {
                     create_message(&ctx, &self.db, &command, opt).await;
                 }
-                _ => warn!("A command was invoked with unexpected arguments"),
+                _ => warn!("A command was invoked with unexpected arguments, Discord should have prevented this"),
             }
         }
     }
@@ -64,7 +73,7 @@ impl EventHandler for Handler {
         let result = create_for_test_guild(&ctx).await;
 
         #[cfg(not(debug_assertions))]
-        let result = Command::create_global_application_command(&ctx, create).await;
+        let result = Command::create_global_command(&ctx, create()).await;
 
         if let Err(e) = result {
             error!("Failed to create app command: {}", e);
@@ -86,7 +95,7 @@ impl EventHandler for Handler {
                 {
                     if let Err(e) = guild_id
                         .member(ctx.clone(), user_id)
-                        .and_then(|mut member| async move { member.add_role(&ctx, role_id).await })
+                        .and_then(|member| async move { member.add_role(&ctx, role_id).await })
                         .await
                     {
                         error!("Could not add role to user {:?}: {:?}", user_id, e);
@@ -113,9 +122,7 @@ impl EventHandler for Handler {
                 {
                     if let Err(e) = guild_id
                         .member(ctx.clone(), user_id)
-                        .and_then(
-                            |mut member| async move { member.remove_role(&ctx, role_id).await },
-                        )
+                        .and_then(|member| async move { member.remove_role(&ctx, role_id).await })
                         .await
                     {
                         error!("Could not remove role from user {:?}: {:?}", user_id, e);
