@@ -77,7 +77,7 @@ pub async fn enable_role(
                         command,
                         format!(
                             "Enabled {} for self-service access",
-                            command.data.resolved.roles[&role_id].name
+                            command.data.resolved.roles[role_id].name
                         ),
                     )
                     .await;
@@ -117,7 +117,7 @@ pub async fn disable_role(
                     command,
                     format!(
                         "Disabled {} for self-service access",
-                        command.data.resolved.roles[&role_id].name
+                        command.data.resolved.roles[role_id].name
                     ),
                 )
                 .await;
@@ -150,7 +150,7 @@ pub async fn create_message(
                             command,
                             format!(
                                 "Sending a message to #{} if one does not already exist",
-                                command.data.resolved.channels[&channel_id]
+                                command.data.resolved.channels[channel_id]
                                     .name
                                     .as_ref()
                                     .expect("Channels should be named")
