@@ -7,8 +7,8 @@ use serenity::{
     all::{CreateEmbed, CreateMessage, EditMessage},
     futures::TryFutureExt,
     model::{
-        prelude::{ChannelId, MessageId, ReactionType},
         Color,
+        prelude::{ChannelId, MessageId, ReactionType},
     },
     prelude::Context,
 };
@@ -55,7 +55,7 @@ impl GuildData {
                 .map(|msg| msg.id);
 
             if message_id.is_err() {
-                error!("Could not send message: {:?}", message_id);
+                error!("Could not send message: {message_id:?}");
             } else {
                 self.channel_id = Some(channel_id);
             }

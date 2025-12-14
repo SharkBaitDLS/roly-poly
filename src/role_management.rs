@@ -5,7 +5,7 @@ use log::{error, warn};
 use pickledb::PickleDb;
 use serenity::{
     builder::{CreateInteractionResponse, CreateInteractionResponseMessage},
-    futures::{stream::FuturesUnordered, StreamExt},
+    futures::{StreamExt, stream::FuturesUnordered},
     model::{
         application::{CommandDataOption, CommandDataOptionValue, CommandInteraction},
         channel::ReactionType,
@@ -36,7 +36,7 @@ where
         )
         .await
     {
-        error!("Could not respond to command: {:?}", e);
+        error!("Could not respond to command: {e:?}");
     }
 }
 
@@ -48,15 +48,18 @@ pub async fn enable_role(
 ) {
     if let CommandDataOptionValue::SubCommand(options) = &opt.value {
         match &options[0..2] {
-            [CommandDataOption {
-                name: opt1_name,
-                value: CommandDataOptionValue::Role(role_id),
-                ..
-            }, CommandDataOption {
-                name: op2_name,
-                value: CommandDataOptionValue::String(emoji_name),
-                ..
-            }] if opt1_name == "role" && op2_name == "emoji" => {
+            [
+                CommandDataOption {
+                    name: opt1_name,
+                    value: CommandDataOptionValue::Role(role_id),
+                    ..
+                },
+                CommandDataOption {
+                    name: op2_name,
+                    value: CommandDataOptionValue::String(emoji_name),
+                    ..
+                },
+            ] if opt1_name == "role" && op2_name == "emoji" => {
                 let guild_id = get_guild_id(command);
                 let guild_data = get_guild_data(db, guild_id);
                 let maybe_emoji = get_emoji(ctx, emoji_name).await;
@@ -86,7 +89,9 @@ pub async fn enable_role(
                         .await;
                 }
             }
-            _ => warn!("A command was invoked with unexpected arguments, Discord should have prevented this"),
+            _ => warn!(
+                "A command was invoked with unexpected arguments, Discord should have prevented this"
+            ),
         }
     }
 }
@@ -122,7 +127,9 @@ pub async fn disable_role(
                 )
                 .await;
             }
-            _ => warn!("A command was invoked with unexpected arguments, Discord should have prevented this"),
+            _ => warn!(
+                "A command was invoked with unexpected arguments, Discord should have prevented this"
+            ),
         }
     }
 }
@@ -165,7 +172,9 @@ pub async fn create_message(
                     }
                 }
             }
-            _ => warn!("A command was invoked with unexpected arguments, Discord should have prevented this"),
+            _ => warn!(
+                "A command was invoked with unexpected arguments, Discord should have prevented this"
+            ),
         }
     }
 }

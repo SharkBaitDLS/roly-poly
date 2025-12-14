@@ -18,9 +18,6 @@ pub fn update_guild_data(db: &RwLock<PickleDb>, guild_id: GuildId, new_data: &Gu
         .expect("The database lock is poisoned due to a panic on write")
         .set::<GuildData>(&guild_id.to_string(), new_data)
     {
-        error!(
-            "Could not write guild data to database for guild {:?}: {}",
-            guild_id, e
-        );
+        error!("Could not write guild data to database for guild {guild_id:?}: {e}");
     }
 }

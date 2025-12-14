@@ -32,6 +32,6 @@ async fn main() {
         .expect("Could not start bot");
 
     if let Err(why) = client.start().await {
-        error!("Bot client error: {:?}", why);
+        error!("Bot client error: {why:?}");
     }
 }

@@ -1,6 +1,6 @@
 use serenity::{
     builder::{CreateCommand, CreateCommandOption},
-    model::{application::CommandOptionType, Permissions},
+    model::{Permissions, application::CommandOptionType},
 };
 
 #[cfg(debug_assertions)]

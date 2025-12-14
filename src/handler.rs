@@ -61,7 +61,9 @@ impl EventHandler for Handler {
                 Some(opt) if opt.name == "message" => {
                     create_message(&ctx, &self.db, &command, opt).await;
                 }
-                _ => warn!("A command was invoked with unexpected arguments, Discord should have prevented this"),
+                _ => warn!(
+                    "A command was invoked with unexpected arguments, Discord should have prevented this"
+                ),
             }
         }
     }
@@ -76,7 +78,7 @@ impl EventHandler for Handler {
         let result = Command::create_global_command(&ctx, create()).await;
 
         if let Err(e) = result {
-            error!("Failed to create app command: {}", e);
+            error!("Failed to create app command: {e}");
         }
     }
 
@@ -84,24 +86,19 @@ impl EventHandler for Handler {
         let bot_user = ctx.http.get_current_user().await.map(|user| user.id);
         if let (Some(guild_id), Some(user_id), Ok(bot_id)) =
             (add_reaction.guild_id, add_reaction.user_id, bot_user)
+            && user_id != bot_id
+            && let Some(role_id) = get_guild_data(&self.db, guild_id)
+                .filter(|data| {
+                    data.get_message_id()
+                        .is_some_and(|message| add_reaction.message_id == message)
+                })
+                .and_then(|data| data.get_role(&add_reaction.emoji).copied())
+            && let Err(e) = guild_id
+                .member(ctx.clone(), user_id)
+                .and_then(|member| async move { member.add_role(&ctx, role_id).await })
+                .await
         {
-            if user_id != bot_id {
-                if let Some(role_id) = get_guild_data(&self.db, guild_id)
-                    .filter(|data| {
-                        data.get_message_id()
-                            .is_some_and(|message| add_reaction.message_id == message)
-                    })
-                    .and_then(|data| data.get_role(&add_reaction.emoji).copied())
-                {
-                    if let Err(e) = guild_id
-                        .member(ctx.clone(), user_id)
-                        .and_then(|member| async move { member.add_role(&ctx, role_id).await })
-                        .await
-                    {
-                        error!("Could not add role to user {:?}: {:?}", user_id, e);
-                    }
-                }
-            }
+            error!("Could not add role to user {user_id:?}: {e:?}");
         }
     }
 
@@ -111,24 +108,19 @@ impl EventHandler for Handler {
             removed_reaction.guild_id,
             removed_reaction.user_id,
             bot_user,
-        ) {
-            if user_id != bot_id {
-                if let Some(role_id) = get_guild_data(&self.db, guild_id)
-                    .filter(|data| {
-                        data.get_message_id()
-                            .is_some_and(|message| removed_reaction.message_id == message)
-                    })
-                    .and_then(|data| data.get_role(&removed_reaction.emoji).copied())
-                {
-                    if let Err(e) = guild_id
-                        .member(ctx.clone(), user_id)
-                        .and_then(|member| async move { member.remove_role(&ctx, role_id).await })
-                        .await
-                    {
-                        error!("Could not remove role from user {:?}: {:?}", user_id, e);
-                    }
-                }
-            }
+        ) && user_id != bot_id
+            && let Some(role_id) = get_guild_data(&self.db, guild_id)
+                .filter(|data| {
+                    data.get_message_id()
+                        .is_some_and(|message| removed_reaction.message_id == message)
+                })
+                .and_then(|data| data.get_role(&removed_reaction.emoji).copied())
+            && let Err(e) = guild_id
+                .member(ctx.clone(), user_id)
+                .and_then(|member| async move { member.remove_role(&ctx, role_id).await })
+                .await
+        {
+            error!("Could not remove role from user {user_id:?}: {e:?}");
         }
     }
 }
